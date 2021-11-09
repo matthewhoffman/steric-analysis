@@ -1,0 +1,227 @@
+#!/usr/bin/env python
+'''
+Try to calculate and plot steric sea level change from E3SM runs
+'''
+
+from __future__ import absolute_import, division, print_function, unicode_literals
+
+import sys
+import os
+import netCDF4
+import datetime
+import numpy as np
+import matplotlib.pyplot as plt
+import scipy.signal
+from matplotlib import cm
+import gsw
+from gsw.density import sigma0
+
+# Load MPAS-Ocean base mesh fields needed
+#fmesh=netCDF4.Dataset('/project/projectdirs/e3sm/inputdata/ocn/mpas-o/oEC60to30v3wLI/oEC60to30v3wLI60lev.171031.nc') # Cryo
+fmesh=netCDF4.Dataset('/global/cscratch1/sd/hoffman2/SLR_tests/oEC60to30v3_60layer.restartFrom_anvil0926.171101.nc') # WC v1
+latCell = fmesh.variables['latCell'][:]
+lonCell = fmesh.variables['lonCell'][:]
+xCell = fmesh.variables['xCell'][:]
+yCell = fmesh.variables['yCell'][:]
+depths = fmesh.variables['refBottomDepth'][:]
+areaCell = fmesh.variables['areaCell'][:]
+bottomDepth = fmesh.variables['bottomDepth'][:]
+maxLevelCell = fmesh.variables['maxLevelCell'][:]
+areaCell = fmesh.variables['areaCell'][:]
+
+
+# some constants
+pii=3.14159
+g=9.8101
+
+
+# ---- Choose time(s) -----
+#yrs=(10, 30, 50, 60, 70,80, 90, 100, 150)
+#yrs=(10, 30, 50, 60, 70,80, 90, 100, 100)
+#yrs=np.arange(1,150,1)
+yrs=np.arange(1,120,2)
+
+#yrs=(50, 50, 50, 60, 70,80, 90, 100, 150)
+#yrs = np.arange(95,102,1)
+mos=(1,)
+
+mo=1
+#mos=np.arange(1,13,1)
+# -------------------------
+
+# ---- Choose run directory ----
+path='/project/projectdirs/m3412/simulations/20190819.GMPAS-DIB-IAF-ISMF.T62_oEC60to30v3wLI.cori-knl.testNewGM/archive/ocn/hist'
+path='/global/cscratch1/sd/hoffman2/4xc02'
+path='/global/cscratch1/sd/hoffman2/SLR_tests/lowres_hist_ens1'
+# -------------------------
+
+
+
+# ---- Choose spatial extent -----
+#idx = np.nonzero(np.logical_and(np.logical_and(latCell<-70.0/180.0*pii, latCell>-85.0/180.0*pii), np.logical_and(lonCell>300.0/360.0*2.0*pii, lonCell<350.0/360.0*2*pii)))[0]  #entire weddell
+#idx = np.nonzero(np.logical_and(np.logical_and(latCell<-70.0/180.0*pii, latCell>-85.0/180.0*pii), np.logical_and(lonCell>270.0/360.0*2.0*pii, lonCell<350.0/360.0*2*pii)))[0]  #entire weddell wider
+#idx = np.nonzero( (latCell<-60.0/180.0*pii) * (latCell>-85.0/180.0*pii) * np.logical_or(lonCell>280.0/360.0*2.0*pii, lonCell<80.0/360.0*2*pii))[0]; size=1.4; fsz=(15,9)  # weddell to Amery 
+idx = np.nonzero( (latCell<-50.0/180.0*pii) )[0] # SO
+
+idx = np.nonzero(latCell<99999999999999999)[0]
+
+
+print("Found {} cells in idx".format(len(idx)))
+
+mo=1
+rho_ref = 1036.0 # typical surface density
+#rho_ref = 1026.0 # E3SM rho_sw
+
+def SL(file):
+    SL = np.zeros((len(idx),))
+    rho =            file.variables['timeMonthly_avg_density']       [0, :, :]
+    layerThickness = file.variables['timeMonthly_avg_layerThickness'][0, :, :]
+    ssh = file.variables['timeMonthly_avg_ssh'][0,:]
+    pressAdjSSH = file.variables['timeMonthly_avg_pressureAdjustedSSH'][0,:]
+    cnt = 0
+    upperOnly = False
+    if upperOnly:
+      # This way is much slower to run
+      for i in idx:
+        maxLev = maxLevelCell[i]
+        bottomDepthHere = bottomDepth[i]
+        thicknessSum = layerThickness[i, :maxLev].sum()
+        thicknessCumSum = layerThickness[i, :maxLev].cumsum()
+        zSurf = bottomDepthHere - thicknessSum
+        zLayerBot = zSurf - thicknessCumSum
+        z = zLayerBot + 0.5 * layerThickness
+        k = np.where(zLayerBot > -700.0)[0][-1]
+        SL[cnt] = -1.0 / rho_ref * (rho[i, :k+1] * layerThickness[i, :k+1]).sum()
+        #print(maxLev, k, zLayerBot.shape)
+        if k+1 <= maxLev-1:
+         if zLayerBot[k+1] < -700.0:
+            # add in partial layer
+            SL[cnt] += -1.0 / rho_ref * (rho[i, k+1] * (zLayerBot[k+1] - -700.0))
+        cnt += 1
+    else:
+      for i in idx:
+
+        maxLev = maxLevelCell[i]
+        #SL[cnt] = -1.0 / rho_ref * (rho[i, :maxLev] * layerThickness[i, :maxLev]).sum()
+        SL[cnt] = -1.0 / rho_ref * (rho[i, :maxLev] * layerThickness[i, :maxLev]).sum() + bottomDepth[i]
+
+        if SL[cnt] > 990:
+            print('maxLev=',maxLev,' bottomDepth=',bottomDepth[i], ' nz=', rho.shape, ' SL=',SL[cnt], ' ssh=',ssh[i], ' ssh_adj=',pressAdjSSH[i])
+            print('rho:', rho[i,:])
+
+            print('layerThick:', layerThickness[i,:])
+            sys.exit()
+
+        SL[i] = SL[i] + (pressAdjSSH[i] - ssh[i]) * 1035.0/1026.0
+        cnt += 1
+
+#    ssh = file.variables['timeMonthly_avg_ssh'][0,:]
+#    pressAdjSSH = file.variables['timeMonthly_avg_pressureAdjustedSSH'][0,:]
+#    SL = SL + (pressAdjSSH - ssh) * 1035.0/1026.0
+    return SL
+
+
+pipath='/global/cscratch1/sd/hoffman2/SLR_tests/piControl'
+yr_pi1=405
+#fpi1=netCDF4.Dataset('{0}/mpaso.hist.am.timeSeriesStatsMonthly.{1:04d}-{2:02d}-01.nc'.format(pipath, yr_pi1, mo), 'r')
+fpi1=netCDF4.Dataset('/global/cscratch1/sd/hoffman2/SLR_tests/piControl/0400-0410/mpaso.hist.0400-0410.nc', 'r')
+yr_pi2=495
+#fpi2=netCDF4.Dataset('{0}/mpaso.hist.am.timeSeriesStatsMonthly.{1:04d}-{2:02d}-01.nc'.format(pipath, yr_pi2, mo), 'r')
+fpi2=netCDF4.Dataset('/global/cscratch1/sd/hoffman2/SLR_tests/piControl/0490-0500/mpaso.hist.0490-0500.nc', 'r')
+drift = (SL(fpi2)-SL(fpi1))/(yr_pi2-yr_pi1) # m/yr
+
+# historical
+ens='ens2'
+yr= 2000
+#f=netCDF4.Dataset('{0}/mpaso.hist.am.timeSeriesStatsMonthly.{1:04d}-{2:02d}-01.nc'.format(path, yr, mo), 'r')
+f=netCDF4.Dataset('/global/cscratch1/sd/hoffman2/SLR_tests/lowres_hist_ens/ensMn/mpaso.hist.2000-2009.nc', 'r')
+yr_ref = 1900
+#fref=netCDF4.Dataset('{0}/mpaso.hist.am.timeSeriesStatsMonthly.{1:04d}-{2:02d}-01.nc'.format(path, yr_ref, 1), 'r')
+fref=netCDF4.Dataset('/global/cscratch1/sd/hoffman2/SLR_tests/lowres_hist_ens/ensMn/mpaso.hist.1900-1909.nc', 'r')
+SLref = SL(fref)
+SLi = SL(f)
+
+SLCdiff = (SLi - SLref)
+SLCrate = (SLi - SLref) / (yr - yr_ref)
+
+figSL = plt.figure(10, facecolor='w', figsize=(14, 6))
+nrow=1
+ncol=2
+size = 1
+ax = figSL.add_subplot(nrow, ncol, 1)
+rng=1
+plt.scatter(lonCell[idx], latCell[idx], s=size, c=SLref, cmap='RdBu_r')
+plt.colorbar()
+plt.title('1900 sea level (m)')
+ax = figSL.add_subplot(nrow, ncol, 2)
+rng=1
+plt.scatter(lonCell[idx], latCell[idx], s=size, c=SLi, cmap='RdBu_r')
+plt.colorbar()
+plt.title('2000 sea level (m)')
+
+
+fig1 = plt.figure(1, facecolor='w', figsize=(14, 6))
+nrow=2
+ncol=2
+ax = fig1.add_subplot(nrow, ncol, 1)
+#plt.grid()
+size = 4
+#plt.scatter(yCell[idx], xCell[idx], s=size, c=SLC)
+size = 1
+rng=1
+plt.scatter(lonCell[idx], latCell[idx], s=size, c=(drift)*1000.0, vmin=-rng, vmax=rng, cmap='RdBu_r')
+plt.colorbar()
+plt.title('PI drift in steric sea\nlevel change (mm/yr)')
+
+
+ax = fig1.add_subplot(nrow, ncol, 2)
+plt.scatter(lonCell[idx], latCell[idx], s=size, c=(SLCrate)*1000.0, vmin=-rng, vmax=rng, cmap='RdBu_r')
+plt.colorbar()
+plt.title('raw steric sea level\nchange (mm/yr), 2000-1900')
+
+ax = fig1.add_subplot(nrow, ncol, 3)
+plt.scatter(lonCell[idx], latCell[idx], s=size, c=(SLCrate-drift)*1000.0*(yr - yr_ref), vmin=-100, vmax=100, cmap='RdBu_r')
+plt.colorbar()
+plt.title('drift-corrected steric sea\nlevel change (mm), 2000-1900')
+
+ax = fig1.add_subplot(nrow, ncol, 4)
+plt.scatter(lonCell[idx], latCell[idx], s=size, c=(SLCrate-drift - (SLCrate-drift).mean())*1000.0, vmin=-rng, vmax=rng, cmap='RdBu_r')
+plt.colorbar()
+plt.title('drift-corrected & demeaned steric\nsea level change (mm/yr), 2000-1900')
+
+
+print("drift mean={}".format((drift*areaCell).mean()/areaCell.mean()*1000))
+print("raw SLC mean={}".format((SLCrate*areaCell).mean()/areaCell.mean()*1000))
+print("drift-corrected SLC mean={}".format(((SLCrate-drift)*areaCell).mean()/areaCell.mean()*1000))
+#axTS.legend()
+#plt.colorbar()
+plt.draw()
+#plt.savefig('foo.png')
+   
+   
+fig2 = plt.figure(2, facecolor='w', figsize=(14, 6))
+nrow=2
+ncol=2
+rng = 1.0
+ax = fig2.add_subplot(nrow, ncol, 1)
+ssh = f.variables['timeMonthly_avg_ssh'][0,:]
+pressAdjSSH = f.variables['timeMonthly_avg_pressureAdjustedSSH'][0,:]
+plt.scatter(lonCell[idx], latCell[idx], s=size, c=pressAdjSSH, vmin=-2.4, vmax=1.2, cmap='RdBu_r')
+plt.colorbar()
+plt.title('SSH, 2000-2009 (m)')
+
+ax = fig2.add_subplot(nrow, ncol, 2)
+sshRef = fref.variables['timeMonthly_avg_ssh'][0,:]
+pressAdjSSHRef = fref.variables['timeMonthly_avg_pressureAdjustedSSH'][0,:]
+plt.scatter(lonCell[idx], latCell[idx], s=size, c=pressAdjSSHRef, vmin=-2.4, vmax=1.2, cmap='RdBu_r')
+plt.colorbar()
+plt.title('SSH, 1900-1909 (m)')
+
+ax = fig2.add_subplot(nrow, ncol, 3)
+rng=0.1
+plt.scatter(lonCell[idx], latCell[idx], s=size, c=pressAdjSSH-pressAdjSSHRef, vmin=-rng, vmax=rng, cmap='RdBu_r')
+plt.colorbar()
+plt.title('SSH, difference (m)')
+
+
+plt.show()
