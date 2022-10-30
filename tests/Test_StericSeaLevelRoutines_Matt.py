@@ -1,8 +1,8 @@
 """
 Name: Test_StericSeaLevelRoutines_Matt.py
 Author: Matt Hoffman and Sid Bishnu
-Details: This script tests the various functions of ../src/StericSeaLevelRoutines.py in analyzing the output of 100-year
-E3SM runs by Matt.
+Details: This script tests the function ComputeStericSeaLevel in ../src/StericSeaLevelRoutines.py by computing the 
+steric contribution to sea level rise using the output of 100-year E3SM runs by Matt.
 """
 
 
@@ -96,8 +96,7 @@ def TestComputeStericSeaLevel(RestrictedColorbars=False):
     nContours = [300,300,300,300]
     cbarShrinkRatio = 0.65
     titles = ['PI Steric Sea Level (m)\nin Year 405','PI Steric Sea Level (m)\nin Year 495',
-              'PI Steric Sea Level\nChange (mm), 495-405',
-              'PI Steric Sea Level Change\nRate or Drift (mm/yr), 495-405']
+              'PI Steric Sea Level\nChange (mm), 495-405','PI Steric Sea Level Change\nRate or Drift (mm/yr), 495-405']
     FileName = 'PI_StericSeaLevel_Change_Rate_405-495'
     fig_size = [20.0,20.0]
     set_aspect_equal = [False,False,False,False]
@@ -137,8 +136,7 @@ def TestComputeStericSeaLevel(RestrictedColorbars=False):
     nContours = [300,300,300,300]
     cbarShrinkRatio = 0.65
     titles = ['Steric Sea Level (m)\nin Year 1900','Steric Sea Level (m)\nin Year 2000',
-              'Steric Sea Level\nChange (mm), 2000-1900',
-              'Steric Sea Level Change\nRate (mm/yr), 2000-1900']
+              'Steric Sea Level\nChange (mm), 2000-1900','Steric Sea Level Change\nRate (mm/yr), 2000-1900']
     FileName = 'StericSeaLevel_Change_Rate_1900-2000'
     fig_size = [20.0,20.0]
     set_aspect_equal = [False,False,False,False]

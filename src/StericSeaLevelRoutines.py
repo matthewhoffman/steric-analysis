@@ -27,7 +27,7 @@ with io.capture_output() as captured:
     import CommonRoutines as CR
 
 
-def ComputeStericSeaLevel(fmesh,file):
+def ComputeStericSeaLevel(fmesh,file,upperOnly=False,z0=-700.0):
     """
     This function determines the sea level for a given file (time slice). It is based on the equations in Appendix B of
     the Griffies 2014 paper. Specifically, this function calculates the local steric tendency, the second term in Eq. 47
@@ -53,9 +53,7 @@ def ComputeStericSeaLevel(fmesh,file):
     ssh = file.variables['timeMonthly_avg_ssh'][0,:]
     PressureAdjustedSSH = file.variables['timeMonthly_avg_pressureAdjustedSSH'][0,:]
     cnt = 0
-    upperOnly = False
     if upperOnly:
-        z0 = -700.0
         # This option only considers the upper water column above the z = z0 isobath, and avoids dealing with drift in 
         # the deep ocean. This way is much slower to run.
         for i in idx:
@@ -68,7 +66,7 @@ def ComputeStericSeaLevel(fmesh,file):
             # third layers, and so on.
             zSurf = thicknessSum - bottomDepthHere
             zLayerBot = zSurf - thicknessCumSum # zLayerBot is the depth of the bottom of every layer.
-            z = zLayerBot + 0.5*layerThickness # z is the depth of the (vertical) center of every layer.
+            z = zLayerBot + 0.5*layerThickness[i,0:maxLevel] # z is the depth of the (vertical) center of every layer.
             k = np.where(zLayerBot > z0)[0][-1] 
             # np.where(condition,[x,y]) yields x when condition is True, and y otherwise. The output is [ndarray or 
             # tuple of ndarrays]. If both x and y are specified, the output array contains elements of x where 

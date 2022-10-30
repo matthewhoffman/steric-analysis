@@ -1,8 +1,8 @@
 """
 Name: Test_StericSeaLevelRoutines_Sid.py
 Author: Matt Hoffman and Sid Bishnu
-Details: This script tests the various functions of ../src/StericSeaLevelRoutines.py in analyzing the output of 10-year
-E3SM runs by Sid for z-level and z-star vertical coordinates.
+Details: This script tests the function ComputeStericSeaLevel in ../src/StericSeaLevelRoutines.py by computing the 
+steric contribution to sea level rise using the output of 10-year E3SM runs by Sid for z-level and z-star vertical coordinates.
 """
 
 
