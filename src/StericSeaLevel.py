@@ -1,7 +1,7 @@
 """
-Name: StericSeaLevelRoutines.py
+Name: StericSeaLevel.py
 Authors: Matt Hoffman and Sid Bishnu
-Details: This script calculates and plots steric sea level change from E3SM runs.
+Details: This script computes the steric sea level.
 
 References:
 
@@ -25,7 +25,10 @@ sys.path.append(os.path.realpath('..') + '/src/')
 from IPython.utils import io
 with io.capture_output() as captured:
     import CommonRoutines as CR
-
+    
+    
+myGlobalConstants = CR.GlobalConstants()
+    
 
 def ComputeStericSeaLevel(fmesh,file,upperOnly=False,z0=-700.0):
     """
@@ -34,7 +37,6 @@ def ComputeStericSeaLevel(fmesh,file,upperOnly=False,z0=-700.0):
     and elaborated on in section B.1.2. Fundamentally, I am just solving Eq. 55 for two different time periods, and then
     taking the difference.
     """
-    myGlobalConstants = CR.GlobalConstants()
     rho_ref = myGlobalConstants.rho_ref
     # Load the MPAS-Ocean base mesh fields as needed.
     latCell = fmesh.variables['latCell'][:]
@@ -83,6 +85,8 @@ def ComputeStericSeaLevel(fmesh,file,upperOnly=False,z0=-700.0):
                 # if the z = z0 isobath overlies or coincides with the bottom depth of the layer straddling the isobath
                     StericSeaLevel[cnt] += -1.0/rho_ref*(rho[i,k+1]*(z0 - zLayerBot[k])) 
                     # Add in the partial or the entire layer.
+            # We now take into consideration, the depression due to sea-ice loading in the steric contribution to SSH.
+            StericSeaLevel[cnt] += -1.0/rho_ref*rho[i,0]*(PressureAdjustedSSH[i] - ssh[i])
             cnt += 1
     else:
         # This way considers the entire water column. This should be fine if the model output is drift-corrected.
@@ -100,6 +104,6 @@ def ComputeStericSeaLevel(fmesh,file,upperOnly=False,z0=-700.0):
                 print('layerThickness[i,:] = ', layerThickness[i,:])
                 sys.exit()
             # We now take into consideration, the depression due to sea-ice loading in the steric contribution to SSH.
-            StericSeaLevel[i] += -1.0/rho_ref*rho[i,0]*(PressureAdjustedSSH[i] - ssh[i])
+            StericSeaLevel[cnt] += -1.0/rho_ref*rho[i,0]*(PressureAdjustedSSH[i] - ssh[i])
             cnt += 1
     return StericSeaLevel
